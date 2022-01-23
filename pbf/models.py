@@ -56,6 +56,12 @@ class GamePlayer(models.Model):
     energy = models.IntegerField(default=0)
     notes = models.TextField()
 
+class Presence(models.Model):
+    game_player = models.ForeignKey(GamePlayer, on_delete=models.CASCADE)
+    left = models.IntegerField()
+    top = models.IntegerField()
+    opacity = models.FloatField(default=1.0)
+
 class GameLog(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
     date = models.DateTimeField(auto_now_add=True, blank=True)

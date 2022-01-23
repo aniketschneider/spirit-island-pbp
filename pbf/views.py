@@ -1,3 +1,4 @@
+import json
 from random import shuffle
 
 from django.db import transaction
@@ -32,12 +33,24 @@ def new_game(request):
     game.major_deck.set(Card.objects.filter(type=Card.MAJOR))
     return redirect(reverse('view_game', args=[game.id]))
 
+@transaction.atomic
 def add_player(request, game_id):
     game = get_object_or_404(Game, pk=game_id)
     spirit_id = int(request.POST['spirit'])
     spirit = get_object_or_404(Spirit, pk=spirit_id)
     gp = GamePlayer(game=game, spirit=spirit, notes="You can add notes here...\ntop:1 bottom:1")
     gp.save()
+    gp.presence_set.create(left=465, top=160)
+    gp.presence_set.create(left=535, top=160)
+    gp.presence_set.create(left=605, top=160)
+    gp.presence_set.create(left=675, top=160)
+    gp.presence_set.create(left=745, top=160)
+    gp.presence_set.create(left=815, top=160)
+    gp.presence_set.create(left=465, top=260)
+    gp.presence_set.create(left=535, top=260)
+    gp.presence_set.create(left=605, top=260)
+    gp.presence_set.create(left=675, top=260)
+    gp.presence_set.create(left=745, top=260)
     gp.hand.set(Card.objects.filter(spirit=spirit))
     return redirect(reverse('view_game', args=[game.id]))
 
@@ -61,7 +74,24 @@ def view_game(request, game_id):
     return render(request, 'game.html', { 'game': game, 'form': form, 'spirits': spirits })
 
 @transaction.atomic
-def gain_power(request, player_id, type):
+def draw_card(request, game_id, type):
+    game = get_object_or_404(Game, pk=game_id)
+    if type == 'minor':
+        deck = game.minor_deck
+    else:
+        deck = game.major_deck
+
+    cards = list(deck.all())
+    shuffle(cards)
+    card = cards[0]
+    deck.remove(card)
+
+    game.gamelog_set.create(text=f'Host drew {card.name}')
+
+    return redirect(reverse('view_game', args=[game.id]))
+
+@transaction.atomic
+def gain_power(request, player_id, type, num):
     player = get_object_or_404(GamePlayer, pk=player_id)
     if type == 'minor':
         deck = player.game.minor_deck
@@ -70,7 +100,7 @@ def gain_power(request, player_id, type):
 
     cards = list(deck.all())
     shuffle(cards)
-    selection = cards[:4]
+    selection = cards[:num]
     for c in selection:
         deck.remove(c)
 
@@ -91,6 +121,16 @@ def choose_card(request, player_id, card_id):
 
     return with_log_trigger(render(request, 'player.html', {'player': player}))
 
+@transaction.atomic
+def choose_card2(request, player_id, card_id):
+    player = get_object_or_404(GamePlayer, pk=player_id)
+    card = get_object_or_404(player.selection, pk=card_id)
+    player.selection.remove(card)
+    player.hand.add(card)
+
+    player.game.gamelog_set.create(text=f'{player.spirit.name} gains {card.name}')
+
+    return with_log_trigger(render(request, 'player.html', {'player': player}))
 
 @transaction.atomic
 def play_card(request, player_id, card_id):
@@ -248,6 +288,17 @@ def change_energy(request, player_id, amount):
         player.game.gamelog_set.create(text=f'{player.spirit.name} pays {-amount} energy')
 
     return with_log_trigger(render(request, 'energy.html', {'player': player}))
+
+@transaction.atomic
+def toggle_presence(request, player_id):
+    j = json.loads(request.body)
+    print(j)
+    player = get_object_or_404(GamePlayer, pk=player_id)
+    presence = get_object_or_404(player.presence_set, left=j['left'], top=j['top'])
+    presence.opacity = abs(1.0 - presence.opacity)
+    presence.save()
+
+    return HttpResponse("")
 
 
 def tab(request, game_id, player_id):
